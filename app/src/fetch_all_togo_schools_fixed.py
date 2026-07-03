@@ -2,8 +2,13 @@ import urllib.request
 import json
 import time
 import socket
+import os
+from pathlib import Path
 
-output_file = r'd:\Hack_end_year\CAREER_GUIDANCE\app\src\data\legrandfrere_togo_schools.json'
+# Use environment variable or default to current script directory
+output_dir = os.getenv('CAREER_DATA_DIR', str(Path(__file__).parent / 'data'))
+os.makedirs(output_dir, exist_ok=True)
+output_file = os.path.join(output_dir, 'legrandfrere_togo_schools.json')
 togo_ids = [561, 560, 530, 558, 477, 559]
 base_url = 'https://legrandfrere.africa/wp-json/wp/v2/etablissement?per_page=100'
 

@@ -196,6 +196,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Cloud Card */}
+
             <div className={`rounded-2xl border p-6 ${user ? "border-success/20 bg-success/5" : "border-primary/20 bg-primary-light/40"}`}>
               {user ? (
                 <>

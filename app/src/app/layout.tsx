@@ -8,6 +8,7 @@ import { ConditionalFooter } from "@/components/layout/ConditionalFooter";
 import { AuthProvider } from "@/lib/supabase/AuthProvider";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { SplashScreen } from "@/components/layout/SplashScreen";
+import { FloatingChatbot } from "@/components/layout/FloatingChatbot";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -90,6 +91,7 @@ export default function RootLayout({
             <main className="flex-1">{children}</main>
             <ConditionalFooter />
             <MobileBottomNav />
+            <FloatingChatbot />
           </AuthProvider>
         </ThemeProvider>
       </body>

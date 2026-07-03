@@ -11,10 +11,16 @@ import html as html_module
 import time
 import urllib.request
 import socket
+import os
+from pathlib import Path
 
-RAW_INPUT = r'd:\Hack_end_year\CAREER_GUIDANCE\app\src\data\legrandfrere_togo_schools.json'
-EXISTING_UNI = r'd:\Hack_end_year\CAREER_GUIDANCE\app\src\data\universities.json'
-OUTPUT_UNI = r'd:\Hack_end_year\CAREER_GUIDANCE\app\src\data\universities.json'
+# Use environment variable or default to current script directory
+data_dir = os.getenv('CAREER_DATA_DIR', str(Path(__file__).parent / 'data'))
+os.makedirs(data_dir, exist_ok=True)
+
+RAW_INPUT = os.path.join(data_dir, 'legrandfrere_togo_schools.json')
+EXISTING_UNI = os.path.join(data_dir, 'universities.json')
+OUTPUT_UNI = os.path.join(data_dir, 'universities.json')
 
 # Mapping: class_list keywords -> human-readable domains
 DOMAIN_MAP = {

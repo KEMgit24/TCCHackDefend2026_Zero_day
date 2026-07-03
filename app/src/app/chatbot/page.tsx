@@ -23,9 +23,17 @@ interface ChatSession {
 interface UserProfile {
   niveau?: string;
   interets?: string[];
-  loisirs?: string[];
+  matieres?: string[];
+  competences?: string[];
+  environnement?: string[];
 }
 
+interface RecommendedCareer {
+  id?: string;
+  nom_metier?: string;
+  secteur?: string;
+  score?: number;
+}
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const QUICK_STARTS = [
@@ -128,6 +136,7 @@ export default function ChatbotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [recommendations, setRecommendations] = useState<RecommendedCareer[]>([]);
   const [showBanner, setShowBanner] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -135,14 +144,38 @@ export default function ChatbotPage() {
 
   // Load from localStorage on mount
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const loadedSessions = loadSessions();
     setSessions(loadedSessions);
-    setProfile(loadProfile());
+    const loadedProfile = loadProfile();
+    setProfile(loadedProfile);
+
+    // Load saved recommendations
+    const savedRecos = localStorage.getItem("careerRecommendations");
+    if (savedRecos) {
+      try { setRecommendations(JSON.parse(savedRecos)); } catch {}
+    }
 
     const savedActiveId = localStorage.getItem(STORAGE_ACTIVE_KEY);
     if (savedActiveId && loadedSessions.find((s) => s.id === savedActiveId)) {
       setActiveSessionId(savedActiveId);
       setShowWelcome(false);
+    }
+
+    // Check if arriving from a roadmap with chatbot_context
+    const chatbotContext = localStorage.getItem("chatbot_context");
+    if (chatbotContext) {
+      try {
+        const ctx = JSON.parse(chatbotContext);
+        localStorage.removeItem("chatbot_context");
+        // Auto-send a contextual question after mount
+        setTimeout(() => {
+          sendQueryWithContext(
+            `Je viens de voir la fiche métier de **${ctx.metier}** (${ctx.secteur}). Peux-tu m'expliquer les débouchés concrets au Togo et les meilleures formations locales pour y accéder ?`,
+            loadedProfile
+          );
+        }, 200);
+      } catch {}
     }
   }, []);
 
@@ -190,7 +223,74 @@ export default function ChatbotPage() {
     localStorage.setItem(STORAGE_ACTIVE_KEY, sessionId);
   };
 
+  // Build profile context for the API
+  const buildProfileContext = (prof: UserProfile | null): string => {
+    if (!prof) return "";
+    const parts = [];
+    if (prof.niveau) parts.push(`Niveau scolaire : ${prof.niveau}`);
+    if (prof.interets?.length) parts.push(`Intérêts : ${prof.interets.join(", ")}`);
+    if (prof.matieres?.length) parts.push(`Matières préférées : ${prof.matieres.join(", ")}`);
+    if (prof.competences?.length) parts.push(`Compétences déclarées : ${prof.competences.join(", ")}`);
+    if (prof.environnement?.length) parts.push(`Environnement de travail souhaité : ${prof.environnement.join(", ")}`);
+    return parts.join(" | ");
+  };
+
   // ─── Send message ───────────────────────────────────────────────────────
+
+  const sendQueryWithContext = async (query: string, prof: UserProfile | null) => {
+    if (!query.trim()) return;
+    setShowWelcome(false);
+
+    const userMsg: Message = {
+      id: generateId(),
+      role: "user",
+      content: query.trim(),
+    };
+
+    const newSession = createNewSession(query);
+    const currentSessionId = newSession.id;
+    setSessions((prev) => {
+      const updated = [newSession, ...prev];
+      saveSessions(updated);
+      return updated;
+    });
+    setActiveSessionId(currentSessionId);
+    localStorage.setItem(STORAGE_ACTIVE_KEY, currentSessionId);
+
+    const messagesWithUser = [userMsg];
+    updateSessionMessages(currentSessionId, messagesWithUser);
+    setIsTyping(true);
+
+    const profileContext = buildProfileContext(prof);
+    const enrichedMessage = profileContext
+      ? `[Contexte utilisateur : ${profileContext}]\n\n${query}`
+      : query;
+
+    try {
+      const response = await fetch("/api/chatbot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: enrichedMessage }),
+      });
+      if (!response.ok) throw new Error("Erreur");
+      const data = await response.json();
+      const assistantMsg: Message = {
+        id: generateId(),
+        role: "assistant",
+        content: data.reponse || data.error || "Je n'ai pas pu répondre.",
+        liens: data.liens_recommandes,
+        questionsSuivantes: data.questions_suivantes,
+      };
+      updateSessionMessages(currentSessionId, [...messagesWithUser, assistantMsg]);
+    } catch {
+      updateSessionMessages(currentSessionId, [
+        ...messagesWithUser,
+        { id: generateId(), role: "assistant", content: "Oups, je n'ai pas pu te répondre. Vérifie ta connexion et réessaie !" },
+      ]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
   const sendQuery = async (query: string) => {
     if (!query.trim() || isTyping) return;
@@ -225,11 +325,16 @@ export default function ChatbotPage() {
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setIsTyping(true);
 
+    const profileContext = buildProfileContext(profile);
+    const enrichedMessage = profileContext
+      ? `[Contexte utilisateur : ${profileContext}]\n\n${query}`
+      : query;
+
     try {
       const response = await fetch("/api/chatbot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: query }),
+        body: JSON.stringify({ message: enrichedMessage }),
       });
 
       if (!response.ok) throw new Error("Erreur");
@@ -402,14 +507,19 @@ export default function ChatbotPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
               </svg>
               <p className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">Astuce :</span>
-                {" "}Tes conversations sont sauvegardees sur cet appareil. Tu peux completer ton profil (optionnel) pour qu'Iki te donne des conseils plus personnalises.
+                {profile ? (
+                  <><span className="font-semibold text-success">✓ Profil chargé</span> — Iki utilise tes intérêts et matières pour personnaliser ses réponses.</>
+                ) : (
+                  <><span className="font-semibold text-foreground">Astuce :</span>{" "}Complète ton profil pour qu&apos;Iki te donne des conseils plus personnalisés.</>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <Link href="/onboarding" className="rounded-lg bg-card border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-surface-hover transition-colors">
-                Completer mon profil
-              </Link>
+              {!profile && (
+                <Link href="/onboarding" className="rounded-lg bg-card border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-surface-hover transition-colors">
+                  Compléter mon profil
+                </Link>
+              )}
               <button onClick={() => setShowBanner(false)} className="text-muted-foreground hover:text-foreground transition-colors ml-1">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -436,8 +546,8 @@ export default function ChatbotPage() {
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
                   {profile?.niveau
-                    ? `Je vois que tu es en ${profile.niveau}. Pose-moi n'importe quelle question sur ton avenir et je t'aiderai !`
-                    : "Ton conseiller d'orientation personnel, specialise dans les filieres et metiers du Togo. Pose-moi n'importe quelle question sur ton avenir !"}
+                    ? `Je vois que tu es en ${profile.niveau}. ${recommendations.length > 0 ? `Ton métier le mieux adapté est **${recommendations[0].nom_metier}**. ` : ""}Pose-moi n'importe quelle question sur ton avenir au Togo !`
+                    : "Ton conseiller d'orientation personnel, spécialisé dans les filières et métiers du Togo. Pose-moi n'importe quelle question sur ton avenir !"}
                 </p>
               </div>
 

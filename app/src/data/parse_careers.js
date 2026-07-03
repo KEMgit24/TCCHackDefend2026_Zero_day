@@ -845,7 +845,9 @@ careers.forEach(c => {
 });
 
 // Read existing careers to merge them.
-const existingData = JSON.parse(fs.readFileSync('d:/Hack_end_year/CAREER_GUIDANCE/app/src/data/careers.json', 'utf8'));
+const path = require('path');
+const careersPath = process.env.CAREERS_JSON_PATH || path.join(__dirname, 'careers.json');
+const existingData = JSON.parse(fs.readFileSync(careersPath, 'utf8'));
 
 // Format the existing careers as well so the new matcher works.
 existingData.careers.forEach(c => {

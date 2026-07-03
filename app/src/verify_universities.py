@@ -1,6 +1,16 @@
 import json
+import os
+from pathlib import Path
 
-data = json.load(open(r'd:\Hack_end_year\CAREER_GUIDANCE\app\src\data\universities.json', encoding='utf-8'))
+# Use environment variable or default to current script directory
+data_dir = os.getenv('CAREER_DATA_DIR', str(Path(__file__).parent / 'data'))
+universities_file = os.path.join(data_dir, 'universities.json')
+
+if not os.path.exists(universities_file):
+    print(f"Error: {universities_file} not found")
+    exit(1)
+
+data = json.load(open(universities_file, encoding='utf-8'))
 print(f'Total: {len(data)} etablissements\n')
 
 # Sample 5 new entries (after first 24 existing ones)
